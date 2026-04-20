@@ -224,13 +224,7 @@ export default function App() {
                 {error}
               </div>
             ) : null}
-            {data?.errors?.length ? (
-              <div className="rounded-xl border border-amber-500/25 bg-amber-500/10 px-4 py-3 text-xs text-amber-50">
-                <span className="font-semibold">Partial feed errors ({data.errors.length}):</span>{' '}
-                {data.errors.map((e) => e.feed?.replace(/^https?:\/\/(www\.)?/, '')).join(', ')}
-              </div>
-            ) : null}
-            <SummaryWidgets stats={stats} />
+            <SummaryWidgets stats={stats} items={items} />
           </div>
           <div className="space-y-4">
             <div className="rounded-2xl border border-white/10 bg-surface-muted/40 p-4 ring-1 ring-white/5">
