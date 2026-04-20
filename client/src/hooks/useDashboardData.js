@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { fetchNews, postRefresh } from '../api.js';
+import { fetchNews } from '../api.js';
 
 export function useDashboardData({ filters, refreshIntervalMs }) {
   const [data, setData] = useState(null);
@@ -37,18 +37,10 @@ export function useDashboardData({ filters, refreshIntervalMs }) {
   );
 
   const hardRefresh = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      await postRefresh();
-      const res = await fetchNews({ ...query, refresh: 'true' });
-      setData(res);
-    } catch (e) {
-      setError(e.message || 'Refresh failed');
-    } finally {
-      setLoading(false);
-    }
-  }, [query]);
+    // Pass refresh=true directly to /news — the server invalidates its cache
+    // and re-fetches all feeds in the same request. No separate /refresh route needed.
+    await load(true);
+  }, [load]);
 
   useEffect(() => {
     load(false);
