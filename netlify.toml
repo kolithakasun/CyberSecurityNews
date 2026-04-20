@@ -12,13 +12,18 @@
   directory = "netlify/functions"
   node_bundler = "esbuild"
 
-# Same-origin API (must be before SPA fallback).
+# Scheduled daily digest — runs at 08:00 UTC every day
+[functions."daily-digest"]
+  schedule = "0 8 * * *"
+
+# Same-origin API — must be before SPA fallback
 [[redirects]]
   from = "/api/*"
   to = "/.netlify/functions/api?apiPath=:splat"
   status = 200
   force = true
 
+# SPA fallback
 [[redirects]]
   from = "/*"
   to = "/index.html"

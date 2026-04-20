@@ -1,13 +1,16 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-// api.js used by hooks — no top-level named imports needed here
+import { useCallback, useEffect, useMemo, useRef } from 'react';
+import { AuthBar } from './components/AuthBar.jsx';
+import { EmailPrefsPanel } from './components/EmailPrefsPanel.jsx';
 import { FiltersBar } from './components/FiltersBar.jsx';
 import { NewsCard } from './components/NewsCard.jsx';
 import { SummaryWidgets } from './components/SummaryWidgets.jsx';
 import { TrendsPanel } from './components/TrendsPanel.jsx';
+import { useAuth } from './hooks/useAuth.js';
 import { useDashboardData } from './hooks/useDashboardData.js';
 import { useLocalStorage } from './hooks/useLocalStorage.js';
 import { computeCveTrends, exportCsv, exportJson } from './utils/cves.js';
 import { postSlackMessage } from './utils/slack.js';
+import { useState } from 'react';
 
 const REFRESH_OPTIONS = [
   { label: 'Off', value: 0 },
@@ -29,6 +32,8 @@ function bookmarkKey(item) {
 }
 
 export default function App() {
+  const { user, loading: authLoading, login, logout, authHeaders } = useAuth();
+
   const [theme, setTheme] = useLocalStorage('csnews_theme', 'dark');
   const [autoRefreshMs, setAutoRefreshMs] = useLocalStorage('csnews_auto_refresh_ms', 0);
   const [notifyEnabled, setNotifyEnabled] = useLocalStorage('csnews_notify', true);
@@ -36,7 +41,7 @@ export default function App() {
   const [bookmarks, setBookmarks] = useLocalStorage('csnews_bookmarks', []);
   const [filters, setFilters] = useState({
     keyword: '',
-    sources: [],   // multi-source array; joined as comma-separated for the API
+    sources: [],
     severity: '',
     from: '',
     to: '',
@@ -55,12 +60,9 @@ export default function App() {
     else document.documentElement.classList.remove('dark');
   }, [theme]);
 
-  // Raw items from the server (filtered by keyword/severity/date only).
   const allItems = data?.items || [];
   const stats = data?.stats;
 
-  // Source options always come from the full unfiltered list so they never
-  // disappear when a source is selected.
   const sourceOptions = useMemo(() => {
     const seen = new Set();
     for (const it of allItems) {
@@ -70,7 +72,6 @@ export default function App() {
     return [...seen].sort((a, b) => a.localeCompare(b));
   }, [allItems]);
 
-  // Apply source filter client-side so the dropdown list is never affected.
   const items = useMemo(() => {
     const selected = filters.sources || [];
     if (!selected.length) return allItems;
@@ -86,7 +87,6 @@ export default function App() {
   );
   const latestItems = useMemo(() => sortByDateDesc(items).slice(0, 60), [items]);
   const trends = useMemo(() => computeCveTrends(items, 10), [items]);
-
   const bookmarkSet = useMemo(() => new Set(bookmarks.map((b) => b.key)), [bookmarks]);
 
   const toggleBookmark = useCallback(
@@ -96,14 +96,7 @@ export default function App() {
         const exists = prev.some((b) => b.key === key);
         if (exists) return prev.filter((b) => b.key !== key);
         return [
-          {
-            key,
-            title: item.title,
-            link: item.link,
-            source: item.source,
-            category: item.category,
-            savedAt: new Date().toISOString(),
-          },
+          { key, title: item.title, link: item.link, source: item.source, category: item.category, savedAt: new Date().toISOString() },
           ...prev,
         ];
       });
@@ -111,6 +104,7 @@ export default function App() {
     [setBookmarks],
   );
 
+  // Critical-item alert effect (browser + Slack + server email)
   useEffect(() => {
     if (!data?.items) return;
 
@@ -119,61 +113,53 @@ export default function App() {
 
     if (!firstFetchDone.current) {
       firstFetchDone.current = true;
-      for (const i of critical) {
-        if (i.link) seenCriticalLinks.current.add(i.link);
-      }
+      for (const i of critical) if (i.link) seenCriticalLinks.current.add(i.link);
       return;
     }
 
-    for (const i of critical) {
-      if (i.link) seenCriticalLinks.current.add(i.link);
-    }
-
+    for (const i of critical) if (i.link) seenCriticalLinks.current.add(i.link);
     if (!fresh.length) return;
 
     (async () => {
+      // Browser notification
       if (notifyEnabled && 'Notification' in window) {
         if (Notification.permission === 'default') await Notification.requestPermission();
         if (Notification.permission === 'granted') {
           for (const item of fresh.slice(0, 3)) {
             // eslint-disable-next-line no-new
-            new Notification('Critical threat detected', { body: item.title });
+            new Notification('🔴 Critical threat detected', { body: item.title });
           }
         }
       }
+      // Slack
       if (slackWebhook) {
-        const lines = fresh
-          .slice(0, 5)
-          .map((i) => `• ${i.title} — ${i.link}`)
-          .join('\n');
+        const lines = fresh.slice(0, 5).map((i) => `• ${i.title} — ${i.link}`).join('\n');
         try {
-          await postSlackMessage(
-            slackWebhook,
-            `*CyberSecurity News*: new critical items\n${lines}`,
-          );
-        } catch {
-          /* ignore */
-        }
+          await postSlackMessage(slackWebhook, `*CyberSecurity News*: new critical items\n${lines}`);
+        } catch { /* ignore */ }
+      }
+      // Server-side email (only if user is logged in and has email alerts enabled)
+      if (user) {
+        try {
+          await fetch('/api/notify', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', ...authHeaders() },
+            body: JSON.stringify({ items: fresh.slice(0, 5) }),
+          });
+        } catch { /* ignore */ }
       }
     })();
-  }, [data?.fetchedAt, data?.items, notifyEnabled, slackWebhook]);
+  }, [data?.fetchedAt, data?.items, notifyEnabled, slackWebhook, user, authHeaders]);
 
   const handleExportJson = () => exportJson(items, stats);
   const handleExportCsv = () => exportCsv(items);
 
-  const bookmarkCards = useMemo(() => {
-    return bookmarks.map((b) => ({
-      title: b.title,
-      link: b.link,
-      source: b.source,
-      summary: 'Saved threat — open for details.',
-      category: b.category || 'informational',
-      severity_score: 0,
-      cves: [],
-      tags: [],
-      merged_sources: [b.source],
-    }));
-  }, [bookmarks]);
+  const bookmarkCards = useMemo(() => bookmarks.map((b) => ({
+    title: b.title, link: b.link, source: b.source,
+    summary: 'Saved threat — open for details.',
+    category: b.category || 'informational',
+    severity_score: 0, cves: [], tags: [], merged_sources: [b.source],
+  })), [bookmarks]);
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-slate-950 via-slate-950 to-slate-900 pb-16 text-ink">
@@ -183,11 +169,11 @@ export default function App() {
             <p className="text-xs font-semibold uppercase tracking-[0.2em] text-sky-300/80">Threat intelligence</p>
             <h1 className="mt-1 text-3xl font-semibold text-white">CyberSecurity News Dashboard</h1>
             <p className="mt-2 max-w-2xl text-sm text-ink-muted">
-              Aggregated RSS from leading vendors and researchers, normalized for SOC and DevSecOps monitoring with
-              severity estimation, CVE extraction, and deduplicated coverage.
+              Aggregated RSS from leading vendors and researchers, normalized for SOC and DevSecOps monitoring.
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
+            <AuthBar user={user} loading={authLoading} onLogin={login} onLogout={logout} />
             <button
               type="button"
               onClick={() => setTheme((t) => (t === 'dark' ? 'light' : 'dark'))}
@@ -203,18 +189,10 @@ export default function App() {
             >
               {loading ? 'Refreshing…' : 'Refresh feeds'}
             </button>
-            <button
-              type="button"
-              onClick={handleExportJson}
-              className="rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm text-ink-muted transition hover:border-emerald-400/40 hover:text-emerald-100"
-            >
+            <button type="button" onClick={handleExportJson} className="rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm text-ink-muted transition hover:border-emerald-400/40 hover:text-emerald-100">
               Export JSON
             </button>
-            <button
-              type="button"
-              onClick={handleExportCsv}
-              className="rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm text-ink-muted transition hover:border-emerald-400/40 hover:text-emerald-100"
-            >
+            <button type="button" onClick={handleExportCsv} className="rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm text-ink-muted transition hover:border-emerald-400/40 hover:text-emerald-100">
               Export CSV
             </button>
           </div>
@@ -224,21 +202,15 @@ export default function App() {
       <main className="mx-auto max-w-7xl space-y-6 px-4 py-8">
         <section className="grid gap-4 lg:grid-cols-3">
           <div className="lg:col-span-2 space-y-4">
-            <FiltersBar
-              filters={filters}
-              onChange={setFilters}
-              sourceOptions={sourceOptions}
-              view={view}
-              onViewChange={setView}
-            />
-            {error ? (
-              <div className="rounded-xl border border-rose-500/30 bg-rose-500/10 px-4 py-3 text-sm text-rose-50">
-                {error}
-              </div>
-            ) : null}
+            <FiltersBar filters={filters} onChange={setFilters} sourceOptions={sourceOptions} view={view} onViewChange={setView} />
+            {error && (
+              <div className="rounded-xl border border-rose-500/30 bg-rose-500/10 px-4 py-3 text-sm text-rose-50">{error}</div>
+            )}
             <SummaryWidgets stats={stats} items={items} />
           </div>
+
           <div className="space-y-4">
+            {/* Auto refresh */}
             <div className="rounded-2xl border border-white/10 bg-surface-muted/40 p-4 ring-1 ring-white/5">
               <h2 className="text-sm font-semibold text-ink">Auto refresh</h2>
               <p className="mt-1 text-xs text-ink-muted">Polls the API and uses server-side cache TTL.</p>
@@ -248,9 +220,7 @@ export default function App() {
                 onChange={(e) => setAutoRefreshMs(Number(e.target.value))}
               >
                 {REFRESH_OPTIONS.map((o) => (
-                  <option key={o.label} value={o.value}>
-                    {o.label}
-                  </option>
+                  <option key={o.label} value={o.value}>{o.label}</option>
                 ))}
               </select>
               <label className="mt-4 flex items-center gap-2 text-sm text-ink-muted">
@@ -260,11 +230,12 @@ export default function App() {
                   onChange={(e) => setNotifyEnabled(e.target.checked)}
                   className="h-4 w-4 rounded border-white/20 bg-black/40"
                 />
-                Browser alerts for new critical threats
+                Browser alerts for critical threats
               </label>
-              <div className="mt-3 space-y-2">
+              {/* Slack webhook — visible to all, stored in localStorage */}
+              <div className="mt-3 space-y-1.5">
                 <label className="text-xs font-medium uppercase tracking-wide text-ink-muted">
-                  Slack incoming webhook (optional)
+                  Slack webhook (optional)
                 </label>
                 <input
                   className="w-full rounded-xl border border-white/10 bg-black/30 px-3 py-2 text-xs text-ink outline-none focus:border-sky-500/50"
@@ -272,11 +243,13 @@ export default function App() {
                   value={slackWebhook}
                   onChange={(e) => setSlackWebhook(e.target.value)}
                 />
-                <p className="text-[11px] text-ink-muted">
-                  Stored locally in your browser. Prefer a server relay for production secrets.
-                </p>
+                <p className="text-[11px] text-ink-muted">Stored in your browser only.</p>
               </div>
             </div>
+
+            {/* Email notifications — requires sign-in */}
+            <EmailPrefsPanel user={user} authHeaders={authHeaders} />
+
             <TrendsPanel trends={trends} />
           </div>
         </section>
@@ -286,28 +259,18 @@ export default function App() {
             <div className="flex items-center justify-between">
               <h2 className="text-xl font-semibold text-white">Saved threats</h2>
               {bookmarks.length ? (
-                <button
-                  type="button"
-                  onClick={() => setBookmarks([])}
-                  className="text-xs text-rose-300 hover:underline"
-                >
+                <button type="button" onClick={() => setBookmarks([])} className="text-xs text-rose-300 hover:underline">
                   Clear all
                 </button>
               ) : null}
             </div>
             {!bookmarkCards.length ? (
-              <p className="text-sm text-ink-muted">No saved items yet. Use “Save” on any card.</p>
+              <p className="text-sm text-ink-muted">No saved items yet. Use "Save" on any card.</p>
             ) : (
               <div className="grid gap-4 md:grid-cols-2">
                 {bookmarkCards.map((item) => (
-                  <NewsCard
-                    key={bookmarkKey(item)}
-                    item={item}
-                    bookmarked
-                    onToggleBookmark={() =>
-                      toggleBookmark({ link: item.link, title: item.title, source: item.source })
-                    }
-                  />
+                  <NewsCard key={bookmarkKey(item)} item={item} bookmarked
+                    onToggleBookmark={() => toggleBookmark({ link: item.link, title: item.title, source: item.source })} />
                 ))}
               </div>
             )}
@@ -324,13 +287,8 @@ export default function App() {
               ) : (
                 <div className="grid gap-4 lg:grid-cols-2">
                   {criticalItems.map((item) => (
-                    <NewsCard
-                      key={bookmarkKey(item)}
-                      item={item}
-                      dense
-                      bookmarked={bookmarkSet.has(bookmarkKey(item))}
-                      onToggleBookmark={toggleBookmark}
-                    />
+                    <NewsCard key={bookmarkKey(item)} item={item} dense
+                      bookmarked={bookmarkSet.has(bookmarkKey(item))} onToggleBookmark={toggleBookmark} />
                   ))}
                 </div>
               )}
@@ -345,12 +303,8 @@ export default function App() {
               </div>
               <div className="grid gap-4">
                 {latestItems.map((item) => (
-                  <NewsCard
-                    key={bookmarkKey(item)}
-                    item={item}
-                    bookmarked={bookmarkSet.has(bookmarkKey(item))}
-                    onToggleBookmark={toggleBookmark}
-                  />
+                  <NewsCard key={bookmarkKey(item)} item={item}
+                    bookmarked={bookmarkSet.has(bookmarkKey(item))} onToggleBookmark={toggleBookmark} />
                 ))}
               </div>
             </section>
