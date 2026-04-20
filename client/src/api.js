@@ -49,7 +49,10 @@ export async function fetchCritical(query = {}) {
 }
 
 export async function postRefresh() {
-  const res = await fetch(joinUrl('/refresh', ''), { method: 'POST' });
+  // Use GET instead of POST — Netlify's 200 rewrite can drop POST semantics
+  // when injecting query params; GET is reliable across all redirect types.
+  // The Fastify server also accepts GET for /refresh.
+  const res = await fetch(joinUrl('/refresh', ''));
   return parseJson(res);
 }
 

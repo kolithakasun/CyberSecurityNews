@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { fetchSources } from './api.js';
+// api.js used by hooks — no top-level named imports needed here
 import { FiltersBar } from './components/FiltersBar.jsx';
 import { NewsCard } from './components/NewsCard.jsx';
 import { SummaryWidgets } from './components/SummaryWidgets.jsx';
@@ -36,13 +36,12 @@ export default function App() {
   const [bookmarks, setBookmarks] = useLocalStorage('csnews_bookmarks', []);
   const [filters, setFilters] = useState({
     keyword: '',
-    source: '',
+    sources: [],   // multi-source array; joined as comma-separated for the API
     severity: '',
     from: '',
     to: '',
   });
   const [view, setView] = useState('dashboard');
-  const [sourceOptions, setSourceOptions] = useState([]);
   const seenCriticalLinks = useRef(new Set());
   const firstFetchDone = useRef(false);
 
@@ -56,17 +55,30 @@ export default function App() {
     else document.documentElement.classList.remove('dark');
   }, [theme]);
 
-  useEffect(() => {
-    fetchSources()
-      .then((res) => {
-        const labels = (res.sources || []).map((s) => s.hostname).filter(Boolean);
-        setSourceOptions([...new Set(labels)].sort());
-      })
-      .catch(() => {});
-  }, []);
-
-  const items = data?.items || [];
+  // Raw items from the server (filtered by keyword/severity/date only).
+  const allItems = data?.items || [];
   const stats = data?.stats;
+
+  // Source options always come from the full unfiltered list so they never
+  // disappear when a source is selected.
+  const sourceOptions = useMemo(() => {
+    const seen = new Set();
+    for (const it of allItems) {
+      const primary = (it.merged_sources && it.merged_sources[0]) || it.source;
+      if (primary) seen.add(primary);
+    }
+    return [...seen].sort((a, b) => a.localeCompare(b));
+  }, [allItems]);
+
+  // Apply source filter client-side so the dropdown list is never affected.
+  const items = useMemo(() => {
+    const selected = filters.sources || [];
+    if (!selected.length) return allItems;
+    return allItems.filter((it) => {
+      const hay = `${it.source} ${(it.merged_sources || []).join(' ')}`.toLowerCase();
+      return selected.some((s) => hay.includes(s.toLowerCase()));
+    });
+  }, [allItems, filters.sources]);
 
   const criticalItems = useMemo(
     () => items.filter((i) => i.category === 'critical').slice(0, 14),
@@ -224,13 +236,7 @@ export default function App() {
                 {error}
               </div>
             ) : null}
-            {data?.errors?.length ? (
-              <div className="rounded-xl border border-amber-500/25 bg-amber-500/10 px-4 py-3 text-xs text-amber-50">
-                <span className="font-semibold">Partial feed errors ({data.errors.length}):</span>{' '}
-                {data.errors.map((e) => e.feed?.replace(/^https?:\/\/(www\.)?/, '')).join(', ')}
-              </div>
-            ) : null}
-            <SummaryWidgets stats={stats} />
+            <SummaryWidgets stats={stats} items={items} />
           </div>
           <div className="space-y-4">
             <div className="rounded-2xl border border-white/10 bg-surface-muted/40 p-4 ring-1 ring-white/5">

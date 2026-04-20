@@ -16,11 +16,15 @@ export function filterItems(items, query) {
       return blob.includes(kw);
     });
   }
+  // Support comma-separated multi-source OR filter
   if (source) {
-    out = out.filter((it) => {
-      const hay = `${it.source} ${(it.merged_sources || []).join(' ')}`.toLowerCase();
-      return hay.includes(source);
-    });
+    const sourceParts = source.split(',').map((s) => s.trim()).filter(Boolean);
+    if (sourceParts.length > 0) {
+      out = out.filter((it) => {
+        const hay = `${it.source} ${(it.merged_sources || []).join(' ')}`.toLowerCase();
+        return sourceParts.some((p) => hay.includes(p));
+      });
+    }
   }
   if (severity && severity !== 'all') {
     out = out.filter((it) => it.category === severity);

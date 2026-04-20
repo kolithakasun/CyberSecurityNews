@@ -39,6 +39,8 @@ app.get('/critical', async (req) =>
   httpApi.handleCritical(aggregator, req.query, { cacheTtlMs: CACHE_TTL_MS }),
 );
 
+// Accept both GET and POST so local dev (Fastify) and Netlify (rewrite) both work.
+app.get('/refresh', async () => httpApi.handleRefresh(aggregator));
 app.post('/refresh', async () => httpApi.handleRefresh(aggregator));
 
 try {
