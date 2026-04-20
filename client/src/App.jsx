@@ -9,7 +9,6 @@ import { useAuth } from './hooks/useAuth.js';
 import { useDashboardData } from './hooks/useDashboardData.js';
 import { useLocalStorage } from './hooks/useLocalStorage.js';
 import { computeCveTrends, exportCsv, exportJson } from './utils/cves.js';
-import { postSlackMessage } from './utils/slack.js';
 import { useState } from 'react';
 
 const REFRESH_OPTIONS = [
@@ -37,7 +36,6 @@ export default function App() {
   const [theme, setTheme] = useLocalStorage('csnews_theme', 'dark');
   const [autoRefreshMs, setAutoRefreshMs] = useLocalStorage('csnews_auto_refresh_ms', 0);
   const [notifyEnabled, setNotifyEnabled] = useLocalStorage('csnews_notify', true);
-  const [slackWebhook, setSlackWebhook] = useLocalStorage('csnews_slack_webhook', '');
   const [bookmarks, setBookmarks] = useLocalStorage('csnews_bookmarks', []);
   const [filters, setFilters] = useState({
     keyword: '',
@@ -122,6 +120,7 @@ export default function App() {
 
     (async () => {
       // Browser notification
+      // Browser notification
       if (notifyEnabled && 'Notification' in window) {
         if (Notification.permission === 'default') await Notification.requestPermission();
         if (Notification.permission === 'granted') {
@@ -131,14 +130,7 @@ export default function App() {
           }
         }
       }
-      // Slack
-      if (slackWebhook) {
-        const lines = fresh.slice(0, 5).map((i) => `• ${i.title} — ${i.link}`).join('\n');
-        try {
-          await postSlackMessage(slackWebhook, `*CyberSecurity News*: new critical items\n${lines}`);
-        } catch { /* ignore */ }
-      }
-      // Server-side email (only if user is logged in and has email alerts enabled)
+      // Server-side: email to user's addresses + admin Slack/Teams webhooks
       if (user) {
         try {
           await fetch('/api/notify', {
@@ -232,19 +224,6 @@ export default function App() {
                 />
                 Browser alerts for critical threats
               </label>
-              {/* Slack webhook — visible to all, stored in localStorage */}
-              <div className="mt-3 space-y-1.5">
-                <label className="text-xs font-medium uppercase tracking-wide text-ink-muted">
-                  Slack webhook (optional)
-                </label>
-                <input
-                  className="w-full rounded-xl border border-white/10 bg-black/30 px-3 py-2 text-xs text-ink outline-none focus:border-sky-500/50"
-                  placeholder="https://hooks.slack.com/services/..."
-                  value={slackWebhook}
-                  onChange={(e) => setSlackWebhook(e.target.value)}
-                />
-                <p className="text-[11px] text-ink-muted">Stored in your browser only.</p>
-              </div>
             </div>
 
             {/* Email notifications — requires sign-in */}

@@ -33,32 +33,45 @@ export function isEmailConfigured() {
   return Boolean(process.env.RESEND_API_KEY);
 }
 
-export async function sendCriticalAlert(toEmail, item) {
+/**
+ * Normalise a recipient value to a deduplicated array of trimmed email strings.
+ * Accepts: string | string[] | comma-separated string
+ */
+function toAddressArray(recipients) {
+  const raw = Array.isArray(recipients) ? recipients : String(recipients || '').split(',');
+  return [...new Set(raw.map((e) => e.trim()).filter(Boolean))];
+}
+
+export async function sendCriticalAlert(toRecipients, item) {
   const client = getResend();
   if (!client) return { skipped: true, reason: 'RESEND_API_KEY not set' };
+  const to = toAddressArray(toRecipients);
+  if (!to.length) return { skipped: true, reason: 'No recipients' };
   const { error } = await client.emails.send({
     from: FROM,
-    to: toEmail,
+    to,
     subject: `🔴 Critical Security Alert: ${item.title.slice(0, 70)}`,
     html: criticalAlertHtml(item),
   });
   if (error) throw new Error(error.message || JSON.stringify(error));
-  return { ok: true };
+  return { ok: true, recipients: to.length };
 }
 
-export async function sendDailyDigest(toEmail, { stats, criticalItems, totalItems }) {
+export async function sendDailyDigest(toRecipients, { stats, criticalItems, totalItems }) {
   const client = getResend();
   if (!client) return { skipped: true, reason: 'RESEND_API_KEY not set' };
+  const to = toAddressArray(toRecipients);
+  if (!to.length) return { skipped: true, reason: 'No recipients' };
   const { error } = await client.emails.send({
     from: FROM,
-    to: toEmail,
+    to,
     subject: `📊 CyberSecurity Daily Digest — ${new Date().toLocaleDateString('en-US', {
       weekday: 'long', month: 'long', day: 'numeric',
     })}`,
     html: dailyDigestHtml({ stats, criticalItems, totalItems }),
   });
   if (error) throw new Error(error.message || JSON.stringify(error));
-  return { ok: true };
+  return { ok: true, recipients: to.length };
 }
 
 // ─── HTML templates ──────────────────────────────────────────────────────────
