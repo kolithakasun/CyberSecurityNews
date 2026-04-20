@@ -36,7 +36,7 @@ export default function App() {
   const [bookmarks, setBookmarks] = useLocalStorage('csnews_bookmarks', []);
   const [filters, setFilters] = useState({
     keyword: '',
-    source: '',
+    sources: [],   // multi-source array; joined as comma-separated for the API
     severity: '',
     from: '',
     to: '',
@@ -55,19 +55,30 @@ export default function App() {
     else document.documentElement.classList.remove('dark');
   }, [theme]);
 
-  const items = data?.items || [];
+  // Raw items from the server (filtered by keyword/severity/date only).
+  const allItems = data?.items || [];
   const stats = data?.stats;
 
-  // Build source list from the actual item .source values so the dropdown always
-  // matches what the server-side filter sees (RSS feed titles, not hostnames).
+  // Source options always come from the full unfiltered list so they never
+  // disappear when a source is selected.
   const sourceOptions = useMemo(() => {
     const seen = new Set();
-    for (const it of items) {
+    for (const it of allItems) {
       const primary = (it.merged_sources && it.merged_sources[0]) || it.source;
       if (primary) seen.add(primary);
     }
     return [...seen].sort((a, b) => a.localeCompare(b));
-  }, [items]);
+  }, [allItems]);
+
+  // Apply source filter client-side so the dropdown list is never affected.
+  const items = useMemo(() => {
+    const selected = filters.sources || [];
+    if (!selected.length) return allItems;
+    return allItems.filter((it) => {
+      const hay = `${it.source} ${(it.merged_sources || []).join(' ')}`.toLowerCase();
+      return selected.some((s) => hay.includes(s.toLowerCase()));
+    });
+  }, [allItems, filters.sources]);
 
   const criticalItems = useMemo(
     () => items.filter((i) => i.category === 'critical').slice(0, 14),

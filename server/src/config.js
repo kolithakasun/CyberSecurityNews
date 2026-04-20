@@ -1,18 +1,47 @@
 export const RSS_FEEDS = [
+  // News & journalism
   'https://feeds.feedburner.com/TheHackersNews',
   'https://www.bleepingcomputer.com/feed/',
   'https://www.securityweek.com/feed',
+  'https://krebsonsecurity.com/feed/',
+
+  // Government / authoritative advisories
+  'https://www.cisa.gov/uscert/ncas/alerts.xml',
+  'https://www.cisa.gov/uscert/ics/advisories.xml',
+  'https://www.ncsc.gov.uk/api/1/services/v1/report-rss-feed.xml',
+
+  // Threat intelligence & vendor research
   'https://isc.sans.edu/rssfeed.xml',
-  'https://www.zerodayinitiative.com/rss/published/',
-  'https://www.exploit-db.com/rss.xml',
-  'https://www.microsoft.com/en-us/security/blog/feed/',
+  'https://blog.talosintelligence.com/feeds/posts/default',
+  'https://cloud.google.com/blog/topics/threat-intelligence/rss.xml',
   'https://unit42.paloaltonetworks.com/feed/',
   'https://research.checkpoint.com/feed/',
   'https://www.crowdstrike.com/blog/feed/',
+  'https://www.sentinelone.com/blog/feed/',
+  'https://www.secureworks.com/blog/rss.xml',
+  'https://www.recordedfuture.com/feed',
+
+  // Exploit & vulnerability research
+  'https://www.zerodayinitiative.com/rss/published/',
+  'https://www.exploit-db.com/rss.xml',
+  'https://rss.packetstormsecurity.com/files/',
+  'https://www.rapid7.com/blog/feed/',
+  'https://www.tenable.com/blog/feed',
+
+  // Vendor security blogs
+  'https://www.microsoft.com/en-us/security/blog/feed/',
   'https://portswigger.net/research/rss',
   'https://googleprojectzero.blogspot.com/feeds/posts/default',
   'https://github.blog/security/feed/',
   'https://snyk.io/blog/feed/',
+  'https://blog.qualys.com/feed',
+
+  // Independent researchers
+  'https://thedfirreport.com/feed/',
+  'https://www.welivesecurity.com/feed/',
+  'https://www.malwarebytes.com/blog/feed/',
+  'https://www.troyhunt.com/rss/',
+  'https://www.schneier.com/feed/atom/',
 ];
 
 export const HIGH_RISK_KEYWORDS = [

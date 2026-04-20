@@ -10,12 +10,14 @@ export function useDashboardData({ filters, refreshIntervalMs }) {
   const query = useMemo(
     () => ({
       keyword: filters.keyword,
-      source: filters.source,
+      // Sources are intentionally excluded here — source filtering is done
+      // client-side so the full source list stays available in the dropdown
+      // regardless of which sources are currently selected.
       severity: filters.severity,
       from: filters.from,
       to: filters.to,
     }),
-    [filters.keyword, filters.source, filters.severity, filters.from, filters.to],
+    [filters.keyword, filters.severity, filters.from, filters.to],
   );
 
   const load = useCallback(
