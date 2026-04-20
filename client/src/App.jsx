@@ -120,7 +120,6 @@ export default function App() {
 
     (async () => {
       // Browser notification
-      // Browser notification
       if (notifyEnabled && 'Notification' in window) {
         if (Notification.permission === 'default') await Notification.requestPermission();
         if (Notification.permission === 'granted') {
@@ -141,7 +140,7 @@ export default function App() {
         } catch { /* ignore */ }
       }
     })();
-  }, [data?.fetchedAt, data?.items, notifyEnabled, slackWebhook, user, authHeaders]);
+  }, [data?.fetchedAt, data?.items, notifyEnabled, user, authHeaders]);
 
   const handleExportJson = () => exportJson(items, stats);
   const handleExportCsv = () => exportCsv(items);
