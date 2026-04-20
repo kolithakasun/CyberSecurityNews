@@ -1,7 +1,7 @@
 /**
  * Dev: `/api/*` → Vite proxy → local Fastify.
- * Prod (Netlify): set `VITE_API_ROOT` to your deployed API origin (HTTPS), e.g.
- * `https://cybersecurity-news-api.onrender.com` — requests go to `/news`, `/sources`, etc.
+ * Prod on Netlify: `/api/*` → redirect → `netlify/functions/api.mjs` (same site).
+ * Optional override: set `VITE_API_ROOT` to an external HTTPS API origin (no trailing slash).
  */
 
 function joinUrl(path, queryString = '') {
@@ -9,18 +9,15 @@ function joinUrl(path, queryString = '') {
   if (import.meta.env.DEV) {
     return `/api${p}${queryString}`;
   }
-  const root = import.meta.env.VITE_API_ROOT?.replace(/\/$/, '');
-  if (!root) {
-    throw new Error(
-      'Missing VITE_API_ROOT. In Netlify: Site configuration → Environment variables → add VITE_API_ROOT pointing to your Node API (see README), then trigger a new deploy.',
-    );
+  const external = import.meta.env.VITE_API_ROOT?.replace(/\/$/, '');
+  if (external) {
+    return `${external}${p}${queryString}`;
   }
-  return `${root}${p}${queryString}`;
+  return `/api${p}${queryString}`;
 }
 
 export function isApiConfigured() {
-  if (import.meta.env.DEV) return true;
-  return Boolean(import.meta.env.VITE_API_ROOT?.trim());
+  return true;
 }
 
 async function parseJson(res) {

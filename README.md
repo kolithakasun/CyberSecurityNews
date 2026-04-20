@@ -66,19 +66,27 @@ npm run dev
 | Name | Description |
 | --- | --- |
 | `VITE_PROXY_API` | Override API target for the Vite dev proxy (local only) | `http://localhost:3001` |
-| **`VITE_API_ROOT`** | **Required for static production builds (e.g. Netlify).** Full HTTPS origin of the Node API, no trailing slash (e.g. `https://cybersecurity-news-api.onrender.com`). Vite inlines this at build time — change it in the host UI and **redeploy** the frontend. | _empty in dev_ |
+| `VITE_API_ROOT` | Optional. If set in production, the UI calls this HTTPS API origin instead of same-site `/api` (no trailing slash). | _empty_ |
 
-## Deploying on Netlify + API on Render
+## Deploying on Netlify (UI + API in the same site)
 
-Netlify only serves the **static** Vite build from `client/dist`. It does **not** run the Fastify RSS worker, so the browser must call a **separate** HTTPS API.
+The static app and the RSS API both deploy on Netlify:
 
-1. **Deploy the API** (example: [Render](https://render.com) using `render.yaml` in this repo, or any Node host). Ensure the service runs `npm start` in `server/` and is reachable over **HTTPS**.
-2. In the API host, set **`CLIENT_ORIGIN`** to your Netlify site URL (e.g. `https://verdant-crostata-8d52cf.netlify.app`) so CORS allows the browser.
-3. In **Netlify** → Site configuration → **Environment variables**, add:
-   - **`VITE_API_ROOT`** = your API origin, e.g. `https://your-service.onrender.com` (no `/api` suffix; the client calls `/news`, `/sources`, etc. on that host).
-4. **Redeploy** the Netlify site so the new variable is baked into the bundle.
+- **UI**: built from `client/dist` (see `netlify.toml`).
+- **API**: `netlify/functions/api.mjs` — same aggregation logic as the Fastify server, with cache under `/tmp` on the function instance.
 
-This repo includes **`netlify.toml`** with the correct `build` command and `publish = "client/dist"`, plus an SPA fallback so client-side routing keeps working.
+Netlify redirects **`/api/*`** → **`/.netlify/functions/api?apiPath=:splat`**, so the browser keeps using `/api/news`, `/api/sources`, etc. (same origin; no CORS setup needed).
+
+**Optional environment variables** (Netlify → Site configuration → Environment variables):
+
+| Name | Purpose |
+| --- | --- |
+| `CACHE_TTL_MS` | Cache lifetime for aggregated feeds (default `120000`). |
+| `FETCH_CONCURRENCY` | Parallel RSS fetches (default `4` on functions). |
+
+**Timeouts:** On the Netlify **Starter** plan, synchronous functions default to **10s**. The first cold fetch of many feeds can exceed that. After a successful run, cached responses are fast. If you hit timeouts, raise the function limit on a paid plan, lower `FETCH_CONCURRENCY`, or use an external long-running API via `VITE_API_ROOT` and `render.yaml` instead.
+
+**External API instead:** Set `VITE_API_ROOT` to another host and redeploy the client; requests go to that origin’s `/news`, `/sources`, etc. (configure CORS there with `CLIENT_ORIGIN`).
 
 ## Production build
 
@@ -87,7 +95,7 @@ npm run install:all
 npm run build --prefix client
 ```
 
-Serve the static `client/dist` with any CDN or static host. Point the UI at the API by setting **`VITE_API_ROOT`** at build time (see table above), and configure the API **`CLIENT_ORIGIN`** for CORS. Alternatively, put a reverse proxy in front so the UI and API share one origin.
+Serve the static `client/dist` with any CDN or static host. On Netlify, the bundled function serves `/api/*` automatically. For other hosts, use a reverse proxy to forward `/api` to a Node process, or set **`VITE_API_ROOT`** to an external API.
 
 ## REST API
 
@@ -108,11 +116,14 @@ Serve the static `client/dist` with any CDN or static host. Point the UI at the 
 ```
 server/src/
   server.js        # Fastify app + routes
+  httpApi.js       # Shared route handlers (Fastify + Netlify)
   aggregator.js    # fetch, dedupe, merge, stats, cache wiring
   normalizer.js    # RSS → unified item, CVE/vendor tags, similarity merge
   classifier.js    # severity + category inference
   cache.js         # disk JSON cache
   config.js        # feeds + keyword dictionaries
+netlify/functions/
+  api.mjs          # Netlify serverless entry (same handlers as Fastify)
 client/src/
   App.jsx          # dashboard shell
   components/      # cards, filters, widgets

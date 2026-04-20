@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { fetchSources, isApiConfigured } from './api.js';
+import { fetchSources } from './api.js';
 import { FiltersBar } from './components/FiltersBar.jsx';
 import { NewsCard } from './components/NewsCard.jsx';
 import { SummaryWidgets } from './components/SummaryWidgets.jsx';
@@ -165,14 +165,6 @@ export default function App() {
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-slate-950 via-slate-950 to-slate-900 pb-16 text-ink">
-      {!isApiConfigured() ? (
-        <div className="border-b border-amber-500/40 bg-amber-950/90 px-4 py-3 text-center text-sm text-amber-50">
-          <strong className="font-semibold">API URL not configured for production.</strong> In Netlify go to{' '}
-          <span className="font-mono">Site configuration → Environment variables</span>, add{' '}
-          <span className="font-mono">VITE_API_ROOT</span> with your deployed Node API base URL (HTTPS, no trailing slash),
-          then redeploy. See repository <span className="font-mono">README.md</span> (Netlify + Render).
-        </div>
-      ) : null}
       <header className="border-b border-white/5 bg-black/20 backdrop-blur">
         <div className="mx-auto flex max-w-7xl flex-col gap-4 px-4 py-6 lg:flex-row lg:items-center lg:justify-between">
           <div>
