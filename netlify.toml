@@ -11,8 +11,6 @@
 [functions]
   directory = "netlify/functions"
   node_bundler = "esbuild"
-  # Ensure server modules are packaged with the function bundle.
-  included_files = ["server/src/**"]
 
 # Same-origin API (must be before SPA fallback).
 [[redirects]]

@@ -1,5 +1,4 @@
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
 import { RSS_FEEDS } from './config.js';
 import { createDiskCache } from './cache.js';
 import {
@@ -7,8 +6,6 @@ import {
   mergeSimilarItems,
   primaryDedupe,
 } from './normalizer.js';
-
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 async function mapPool(items, concurrency, fn) {
   const results = [];
@@ -71,8 +68,10 @@ function statsFor(items, { now = new Date() } = {}) {
 export function createAggregator(options = {}) {
   const ttlMs = Number(options.cacheTtlMs ?? 120_000);
   const concurrency = Number(options.fetchConcurrency ?? 5);
-  const cacheDir =
-    options.cacheDir || path.join(__dirname, '..', 'data');
+  // Prefer an explicit cacheDir (always set by both server.js and the Netlify function).
+  // Fall back to <cwd>/data so the module never touches import.meta.url, which is
+  // undefined when esbuild bundles the code as CommonJS.
+  const cacheDir = options.cacheDir || path.join(process.cwd(), 'data');
 
   const diskCache = createDiskCache({ cacheDir, ttlMs });
 
