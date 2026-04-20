@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { fetchSources } from './api.js';
+// api.js used by hooks — no top-level named imports needed here
 import { FiltersBar } from './components/FiltersBar.jsx';
 import { NewsCard } from './components/NewsCard.jsx';
 import { SummaryWidgets } from './components/SummaryWidgets.jsx';
@@ -42,7 +42,6 @@ export default function App() {
     to: '',
   });
   const [view, setView] = useState('dashboard');
-  const [sourceOptions, setSourceOptions] = useState([]);
   const seenCriticalLinks = useRef(new Set());
   const firstFetchDone = useRef(false);
 
@@ -56,17 +55,19 @@ export default function App() {
     else document.documentElement.classList.remove('dark');
   }, [theme]);
 
-  useEffect(() => {
-    fetchSources()
-      .then((res) => {
-        const labels = (res.sources || []).map((s) => s.hostname).filter(Boolean);
-        setSourceOptions([...new Set(labels)].sort());
-      })
-      .catch(() => {});
-  }, []);
-
   const items = data?.items || [];
   const stats = data?.stats;
+
+  // Build source list from the actual item .source values so the dropdown always
+  // matches what the server-side filter sees (RSS feed titles, not hostnames).
+  const sourceOptions = useMemo(() => {
+    const seen = new Set();
+    for (const it of items) {
+      const primary = (it.merged_sources && it.merged_sources[0]) || it.source;
+      if (primary) seen.add(primary);
+    }
+    return [...seen].sort((a, b) => a.localeCompare(b));
+  }, [items]);
 
   const criticalItems = useMemo(
     () => items.filter((i) => i.category === 'critical').slice(0, 14),
