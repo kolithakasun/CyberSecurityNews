@@ -8,6 +8,9 @@
     "build": "npm run build --prefix client",
     "start": "npm start --prefix server"
   },
+  "dependencies": {
+    "rss-parser": "^3.13.0"
+  },
   "devDependencies": {
     "concurrently": "^9.1.0"
   }

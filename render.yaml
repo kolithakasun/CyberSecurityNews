@@ -1,0 +1,19 @@
+# Deploy the API to Render: https://render.com/docs/yaml-spec
+# After deploy, set Netlify env VITE_API_ROOT=https://<your-service>.onrender.com
+# and redeploy the Netlify site so Vite bakes the URL into the client bundle.
+
+services:
+  - type: web
+    name: cybersecurity-news-api
+    runtime: node
+    plan: free
+    rootDir: server
+    buildCommand: npm install
+    startCommand: npm start
+    envVars:
+      - key: NODE_VERSION
+        value: "20"
+      # Render sets PORT automatically. Set CLIENT_ORIGIN in the Render dashboard to your Netlify URL, e.g.
+      # https://verdant-crostata-8d52cf.netlify.app (comma-separated if you use multiple origins).
+      - key: CLIENT_ORIGIN
+        sync: false

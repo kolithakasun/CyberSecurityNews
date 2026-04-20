@@ -61,11 +61,32 @@ npm run dev
 | `FETCH_CONCURRENCY` | Parallel RSS fetches | `5` |
 | `CACHE_DIR` | Directory for `feed-cache.json` | `server/data` |
 
-### Client (optional)
+### Client
 
 | Name | Description |
 | --- | --- |
-| `VITE_PROXY_API` | Override API target for the Vite dev proxy | `http://localhost:3001` |
+| `VITE_PROXY_API` | Override API target for the Vite dev proxy (local only) | `http://localhost:3001` |
+| `VITE_API_ROOT` | Optional. If set in production, the UI calls this HTTPS API origin instead of same-site `/api` (no trailing slash). | _empty_ |
+
+## Deploying on Netlify (UI + API in the same site)
+
+The static app and the RSS API both deploy on Netlify:
+
+- **UI**: built from `client/dist` (see `netlify.toml`).
+- **API**: `netlify/functions/api.mjs` — same aggregation logic as the Fastify server, with cache under `/tmp` on the function instance.
+
+Netlify redirects **`/api/*`** → **`/.netlify/functions/api?apiPath=:splat`**, so the browser keeps using `/api/news`, `/api/sources`, etc. (same origin; no CORS setup needed).
+
+**Optional environment variables** (Netlify → Site configuration → Environment variables):
+
+| Name | Purpose |
+| --- | --- |
+| `CACHE_TTL_MS` | Cache lifetime for aggregated feeds (default `120000`). |
+| `FETCH_CONCURRENCY` | Parallel RSS fetches (default `4` on functions). |
+
+**Timeouts:** On the Netlify **Starter** plan, synchronous functions default to **10s**. The first cold fetch of many feeds can exceed that. After a successful run, cached responses are fast. If you hit timeouts, raise the function limit on a paid plan, lower `FETCH_CONCURRENCY`, or use an external long-running API via `VITE_API_ROOT` and `render.yaml` instead.
+
+**External API instead:** Set `VITE_API_ROOT` to another host and redeploy the client; requests go to that origin’s `/news`, `/sources`, etc. (configure CORS there with `CLIENT_ORIGIN`).
 
 ## Production build
 
@@ -74,10 +95,7 @@ npm run install:all
 npm run build --prefix client
 ```
 
-Serve the static `client/dist` with any CDN or static host, and place the API behind the same origin or configure CORS `CLIENT_ORIGIN` to your UI origin. Point the UI at the API by:
-
-- configuring a reverse proxy so `/api` forwards to the Node service, **or**
-- rebuilding the client with a small change to `client/src/api.js` to use an absolute API base URL.
+Serve the static `client/dist` with any CDN or static host. On Netlify, the bundled function serves `/api/*` automatically. For other hosts, use a reverse proxy to forward `/api` to a Node process, or set **`VITE_API_ROOT`** to an external API.
 
 ## REST API
 
@@ -98,11 +116,14 @@ Serve the static `client/dist` with any CDN or static host, and place the API be
 ```
 server/src/
   server.js        # Fastify app + routes
+  httpApi.js       # Shared route handlers (Fastify + Netlify)
   aggregator.js    # fetch, dedupe, merge, stats, cache wiring
   normalizer.js    # RSS → unified item, CVE/vendor tags, similarity merge
   classifier.js    # severity + category inference
   cache.js         # disk JSON cache
   config.js        # feeds + keyword dictionaries
+netlify/functions/
+  api.mjs          # Netlify serverless entry (same handlers as Fastify)
 client/src/
   App.jsx          # dashboard shell
   components/      # cards, filters, widgets
