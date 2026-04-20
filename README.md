@@ -61,11 +61,24 @@ npm run dev
 | `FETCH_CONCURRENCY` | Parallel RSS fetches | `5` |
 | `CACHE_DIR` | Directory for `feed-cache.json` | `server/data` |
 
-### Client (optional)
+### Client
 
 | Name | Description |
 | --- | --- |
-| `VITE_PROXY_API` | Override API target for the Vite dev proxy | `http://localhost:3001` |
+| `VITE_PROXY_API` | Override API target for the Vite dev proxy (local only) | `http://localhost:3001` |
+| **`VITE_API_ROOT`** | **Required for static production builds (e.g. Netlify).** Full HTTPS origin of the Node API, no trailing slash (e.g. `https://cybersecurity-news-api.onrender.com`). Vite inlines this at build time — change it in the host UI and **redeploy** the frontend. | _empty in dev_ |
+
+## Deploying on Netlify + API on Render
+
+Netlify only serves the **static** Vite build from `client/dist`. It does **not** run the Fastify RSS worker, so the browser must call a **separate** HTTPS API.
+
+1. **Deploy the API** (example: [Render](https://render.com) using `render.yaml` in this repo, or any Node host). Ensure the service runs `npm start` in `server/` and is reachable over **HTTPS**.
+2. In the API host, set **`CLIENT_ORIGIN`** to your Netlify site URL (e.g. `https://verdant-crostata-8d52cf.netlify.app`) so CORS allows the browser.
+3. In **Netlify** → Site configuration → **Environment variables**, add:
+   - **`VITE_API_ROOT`** = your API origin, e.g. `https://your-service.onrender.com` (no `/api` suffix; the client calls `/news`, `/sources`, etc. on that host).
+4. **Redeploy** the Netlify site so the new variable is baked into the bundle.
+
+This repo includes **`netlify.toml`** with the correct `build` command and `publish = "client/dist"`, plus an SPA fallback so client-side routing keeps working.
 
 ## Production build
 
@@ -74,10 +87,7 @@ npm run install:all
 npm run build --prefix client
 ```
 
-Serve the static `client/dist` with any CDN or static host, and place the API behind the same origin or configure CORS `CLIENT_ORIGIN` to your UI origin. Point the UI at the API by:
-
-- configuring a reverse proxy so `/api` forwards to the Node service, **or**
-- rebuilding the client with a small change to `client/src/api.js` to use an absolute API base URL.
+Serve the static `client/dist` with any CDN or static host. Point the UI at the API by setting **`VITE_API_ROOT`** at build time (see table above), and configure the API **`CLIENT_ORIGIN`** for CORS. Alternatively, put a reverse proxy in front so the UI and API share one origin.
 
 ## REST API
 

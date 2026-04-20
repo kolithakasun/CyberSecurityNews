@@ -1,0 +1,16 @@
+# Netlify hosts the React app from client/dist.
+# The RSS API runs separately (Node). Set VITE_API_ROOT in Netlify UI to your API URL
+# (e.g. https://your-service.onrender.com) so the browser can reach it over HTTPS.
+
+[build]
+  command = "npm install && npm run install:all && npm run build --prefix client"
+  publish = "client/dist"
+
+[build.environment]
+  NODE_VERSION = "20"
+
+# SPA fallback — must come after static assets; Netlify evaluates more specific rules first.
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200
